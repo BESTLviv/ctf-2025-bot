@@ -103,7 +103,6 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
             await message.answer(team_info, reply_markup=get_team_menu_keyboard())
             await state.set_state(TeamMenu.main)
         else:
-            # Send the findTeam.png image from the assets folder
             image_path = os.path.join(config.ASSETS_PATH, "findTeam.png")
             if not os.path.exists(image_path):
                 logger.error(f"Image file not found at {image_path}")
@@ -138,7 +137,6 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
 
     @dp.message(lambda message: message.text == "👉 Чат учасників 💭")
     async def process_chat_link(message: types.Message):
-        # Send the chat.png image from the assets folder
         image_path = os.path.join(config.ASSETS_PATH, "chat.png")
         if not os.path.exists(image_path):
             logger.error(f"Image file not found at {image_path}")
@@ -314,11 +312,10 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
         if current_state in [TeamCreation.team_name, TeamCreation.team_password, TeamJoin.team_name, TeamJoin.team_password, TeamLeaveConfirm.first_confirm, TeamLeaveConfirm.second_confirm]:
             await send_main_menu(message, state)
         else:
-            await send_main_menu(message, state)  # Для інших станів також повертаємо до меню
+            await send_main_menu(message, state) 
 
     @dp.message(lambda message: message.text == "🧪 Тестове завдання", TeamMenu.main)
     async def process_test_task(message: types.Message):
-        # Send the test.png image from the assets folder
         image_path = os.path.join(config.ASSETS_PATH, "test.png")
         if not os.path.exists(image_path):
             logger.error(f"Image file not found at {image_path}")

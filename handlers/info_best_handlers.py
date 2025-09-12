@@ -16,7 +16,6 @@ def get_back_to_main_menu_keyboard():
 def register_info_best_handlers(dp: Dispatcher, db=None, bot=None):
     @dp.message(lambda message: message.text == "Хто такі BEST Lviv❓")
     async def process_info_best(message: types.Message):
-        # Обробка зображення best.png
         image_path = os.path.join(config.ASSETS_PATH, "best.png")
         if not os.path.exists(image_path):
             logger.error(f"Image file not found at {image_path}")
@@ -29,7 +28,6 @@ def register_info_best_handlers(dp: Dispatcher, db=None, bot=None):
                 logger.error(f"Failed to send best.png: {str(e)}")
                 await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
         
-        # Текст із жирним шрифтом у HTML-форматі
         await message.answer(
             "<b>BEST Lviv</b> — це осередок міжнародної <b>неприбуткової, непартійної, молодіжної організації</b>.\n"
             "Створено у <b>2002</b> році при <b>Національному університеті \"Львівська політехніка\"</b>.\n\n"

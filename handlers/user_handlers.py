@@ -169,7 +169,7 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
     async def process_age(message: types.Message, state: FSMContext):
         age_text = message.text.strip()
         if not age_text.isdigit() or not 16 <= int(age_text) <= 50:
-            await message.answer("♦️ Скільки тобі років? :\n‼️ Упс, вік має бути числом від 16 до 50 😄. Спробуй ще раз 😏:")
+            await message.answer("♦️ Скільки тобі років? :\n‼️ Упс, вік має бути числом від 16 😄. Спробуй ще раз 😏:")
             return
         await state.update_data(age=int(age_text))
         await message.answer(f"{age_text} - поважна цифра 🧐. Скоро з тобою підемо на пенсію")

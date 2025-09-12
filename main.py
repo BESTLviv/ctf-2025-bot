@@ -23,18 +23,6 @@ from handlers.team_handlers import register_team_handlers
 from handlers.cv_handlers import register_cv_handlers
 from database import Database
 
-# Дебаг: виведення sys.path
-print("sys.path:", sys.path)
-
-# Налаштування логування
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("bot.log"),
-        logging.StreamHandler()
-    ]
-)
 logger = logging.getLogger(__name__)
 
 def is_bot_running():
@@ -44,7 +32,6 @@ def is_bot_running():
     return False
 
 async def main():
-    # Перевірка, чи всі необхідні змінні середовища присутні
     required_vars = ["BOT_TOKEN", "MONGODB_URI"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     if missing_vars:
@@ -62,11 +49,8 @@ async def main():
         print("Error: Another instance of the bot is already running!")
         return
 
-    # Ініціалізація бота та диспетчера
     bot = Bot(token=config.BOT_TOKEN)
     dp = Dispatcher()
-
-    # Ініціалізація бази даних
     try:
         db = Database(config.MONGODB_URI)
     except Exception as e:
@@ -74,7 +58,6 @@ async def main():
         print(f"Error: Failed to initialize database: {e}")
         return
 
-    # Реєстрація обробників
     print("Registering handlers...")
     try:
         register_admin_handlers(dp, db, bot)
@@ -94,7 +77,6 @@ async def main():
         print(f"Error registering handlers: {e}")
         raise
 
-    # Запуск бота
     try:
         logger.info("Starting bot polling")
         print("Starting bot polling...")
