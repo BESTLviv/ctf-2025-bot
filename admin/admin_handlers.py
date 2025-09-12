@@ -18,7 +18,6 @@ def get_admin_menu_keyboard():
     )
 
 def register_admin_handlers(dp: Dispatcher, db: Database, bot):
-    # Обробка введення фрази для входу в адмін-панель
     @dp.message(lambda message: message.text and message.text.lower() == config.ADMIN_ENTRY_PHRASE.lower())
     async def process_admin_entry(message: types.Message, state: FSMContext):
         current_state = await state.get_state()
