@@ -1,16 +1,6 @@
 import os
 import sys
-from dotenv import load_dotenv
-
-# Завантаження .env файлу з явним шляхом на початку
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
-print("BOT_TOKEN:", os.getenv("BOT_TOKEN"))  # Дебаг вивід для перевірки
-print("MONGODB_URI:", os.getenv("MONGODB_URI"))  # Дебаг вивід для перевірки
-
-# Тепер імпорти, які залежать від env
 import config
-
-# Решта імпортів
 import psutil
 import asyncio
 import logging
