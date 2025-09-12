@@ -1,0 +1,8 @@
+.env
+assets/
+__pycache__/
+*.pyc
+bot.log
+.vscode/
+.idea/
+venv/
