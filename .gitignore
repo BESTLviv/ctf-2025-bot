@@ -1,5 +1,4 @@
 .env
-assets/
 __pycache__/
 *.pyc
 bot.log
