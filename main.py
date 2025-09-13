@@ -15,12 +15,6 @@ from database import Database
 
 logger = logging.getLogger(__name__)
 
-def is_bot_running():
-    for proc in psutil.process_iter(['name', 'cmdline']):
-        if 'python' in proc.info['name'] and 'main.py' in ' '.join(proc.info['cmdline']):
-            return True
-    return False
-
 async def main():
     required_vars = ["BOT_TOKEN", "MONGODB_URI"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
@@ -32,11 +26,6 @@ async def main():
     if not config.BOT_TOKEN:
         logger.error("BOT_TOKEN is not set or is None")
         print("Error: BOT_TOKEN is not set or is None")
-        return
-
-    if is_bot_running():
-        logger.error("Another instance of the bot is already running!")
-        print("Error: Another instance of the bot is already running!")
         return
 
     bot = Bot(token=config.BOT_TOKEN)
