@@ -30,7 +30,7 @@ COMPLIMENTS = [
     "Бачила зранку твоє ім’я в гороскопі. Кажуть, такі люди сьогодні на правильному шляху 🫡",
     "Круто! Не чула цього імені, відколи динозаври вимерли 😧",
     "Чесно? Це дуже круто 😎",
-    "Ха-ха-ха. Нарешті..... ти думав(ла) я тебе не знайду, {}?"
+    "Ха-ха-ха. Нарешті..... тебе знайти легше, ніж ти думаєш{}?"
 ]
 
 def get_main_menu_keyboard(is_participant=False, event_state=None):
@@ -356,7 +356,7 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
             await message.answer("♦️ Введи свою спеціальність:\n‼️ Упс, введи коректну назву спеціальності (не менше 2 символів). 😏 Спробуй ще!")
             return
         await state.update_data(specialty=specialty)
-        await message.answer("Тільки чесно, сам захотів, чи батьки відправили? 😮‍💨")
+        await message.answer("Тільки чесно, це було власне бажання, чи просто батьки відправили? 😮‍💨")
         await message.answer("♦️ Вибери свій курс 🤓:", reply_markup=get_courses_keyboard())
         await state.set_state(Registration.course)
 
@@ -368,7 +368,7 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
     @dp.message(lambda message: message.text in COURSES, Registration.course)
     async def process_course(message: types.Message, state: FSMContext):
         await state.update_data(course=message.text)
-        await message.answer("♦️ Звідки ти дізнався(-лась) про змагання? 📢", reply_markup=get_source_keyboard())
+        await message.answer("♦️ Як тебе занесло на змагання? 📢", reply_markup=get_source_keyboard())
         await state.set_state(Registration.source)
 
     @dp.message(Registration.course)
@@ -380,13 +380,13 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
 
     @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, Registration.source)
     async def process_invalid_media_source(message: types.Message, state: FSMContext):
-        await message.answer("♦️ Звідки ти дізнався(-лась) про змагання? 📢\n‼️ Будь ласка, натискай на кнопки! Не надсилай стікери, фото, GIF чи відео.", reply_markup=get_source_keyboard())
+        await message.answer("♦️ Як тебе занесло на змагання? 📢\n‼️ Будь ласка, натискай на кнопки! Не надсилай стікери, фото, GIF чи відео.", reply_markup=get_source_keyboard())
         return
 
     @dp.message(lambda message: message.text in ["Instagram", "LinkedIn", "TikTok", "Друзі", "Представники університету", "Живі оголошення/інфостійки", "Інше"], Registration.source)
     async def process_source(message: types.Message, state: FSMContext):
         if message.text == "Інше":
-            await message.answer("Ого, цікаво! Введи, звідки саме ти дізнався(-лась):")
+            await message.answer("Ого, цікаво! Введи, звідки саме ти знаєш про BEST CTF:")
             await state.set_state(Registration.custom_source)
         else:
             await state.update_data(source=message.text)
@@ -397,23 +397,23 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
     @dp.message(Registration.source)
     async def process_invalid_source(message: types.Message, state: FSMContext):
         if not message.text:
-            await message.answer("♦️ Звідки ти дізнався(-лась) про змагання? 📢\n‼️ Будь ласка, натискай на кнопки! Не надсилай фото, гіфки, стікери чи голосові повідомлення.", reply_markup=get_source_keyboard())
+            await message.answer("♦️ Як тебе занесло на змагання? 📢\n‼️ Будь ласка, натискай на кнопки! Не надсилай фото, гіфки, стікери чи голосові повідомлення.", reply_markup=get_source_keyboard())
             return
-        await message.answer("♦️ Звідки ти дізнався(-лась) про змагання? 📢\n‼️ Будь ласка, вибери один із варіантів нижче:", reply_markup=get_source_keyboard())
+        await message.answer("♦️ Як тебе занесло на змагання? 📢\n‼️ Будь ласка, вибери один із варіантів нижче:", reply_markup=get_source_keyboard())
 
     @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, Registration.custom_source)
     async def process_invalid_media_custom_source(message: types.Message, state: FSMContext):
-        await message.answer("♦️ Введи, звідки саме ти дізнався(-лась):\n‼️ Будь ласка, надсилай тільки текст! Не стікери, фото, GIF чи відео.")
+        await message.answer("♦️ Введи, звідки саме ти знаєш про BEST CTF:\n‼️ Будь ласка, надсилай тільки текст! Не стікери, фото, GIF чи відео.")
         return
 
     @dp.message(Registration.custom_source)
     async def process_custom_source(message: types.Message, state: FSMContext):
         if not message.text:
-            await message.answer("♦️ Введи, звідки саме ти дізнався(-лась):\n‼️ Будь ласка, надсилай тільки текст! Не фото, гіфки, стікери чи голосові повідомлення.")
+            await message.answer("♦️ Введи, звідки саме ти знаєш про BEST CTF:\n‼️ Будь ласка, надсилай тільки текст! Не фото, гіфки, стікери чи голосові повідомлення.")
             return
         custom_source = message.text.strip()
         if len(custom_source) < 2:
-            await message.answer("♦️ Введи, звідки саме ти дізнався(-лась):\n‼️ Упс, введи коректне джерело (не менше 2 символів)! 😅")
+            await message.answer("♦️ Введи, звідки саме ти знаєш про BEST CTF:\n‼️ Упс, введи коректне джерело (не менше 2 символів)! 😅")
             return
         await state.update_data(source=custom_source)
         await message.answer("Чудово, додала джерело! 🤓")
@@ -454,7 +454,7 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
                     message.chat.id
                 )
                 logger.info(f"Added participant {user_id} to DB")
-                await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи ти добре ввів(-ела) особисті дані. 😌", reply_markup=get_check_data_keyboard())
+                await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи добре введено особисті дані. 😌", reply_markup=get_check_data_keyboard())
                 await state.set_state(Registration.check_data)
             except Exception as e:
                 logger.error(f"Failed to add participant {user_id}: {e}")
@@ -468,7 +468,7 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
 
     @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, Registration.check_data)
     async def process_invalid_media_check_data(message: types.Message, state: FSMContext):
-        await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи ти добре ввів(-ела) особисті дані. 😌\n‼️ Будь ласка, натискай на кнопки! Не надсилай стікери, фото, GIF чи відео.", reply_markup=get_check_data_keyboard())
+        await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи добре введено особисті дані. 😌\n‼️ Будь ласка, натискай на кнопки! Не надсилай стікери, фото, GIF чи відео.", reply_markup=get_check_data_keyboard())
         return
 
     @dp.message(lambda message: message.text in ["Правильно ✅", "Неправильно ❌"], Registration.check_data)
@@ -484,9 +484,9 @@ def register_user_handlers(dp: Dispatcher, db: Database, bot: Bot):
     @dp.message(Registration.check_data)
     async def process_invalid_check_data(message: types.Message, state: FSMContext):
         if not message.text:
-            await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи ти добре ввів(-ела) особисті дані. 😌\n‼️ Будь ласка, натискай на кнопки! Не надсилай фото, гіфки, стікери чи голосові повідомлення.", reply_markup=get_check_data_keyboard())
+            await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи добре введено особисті дані. 😌\n‼️ Будь ласка, натискай на кнопки! Не надсилай фото, гіфки, стікери чи голосові повідомлення.", reply_markup=get_check_data_keyboard())
             return
-        await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи ти добре ввів(-ела) особисті дані. 😌\n‼️ Будь ласка, вибери одну з кнопок нижче:", reply_markup=get_check_data_keyboard())
+        await message.answer("♦️ Перед тим, як завершити реєстрацію, перевір, чи добре введено особисті дані. 😌\n‼️ Будь ласка, вибери одну з кнопок нижче:", reply_markup=get_check_data_keyboard())
 
     @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, Registration.data_consent)
     async def process_invalid_media_consent(message: types.Message, state: FSMContext):
