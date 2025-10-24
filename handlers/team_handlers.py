@@ -5,48 +5,73 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
 from states.team import TeamCreation, TeamJoin, TeamMenu, TeamLeaveConfirm
 from database import Database
-from handlers.cv_handlers import register_cv_handlers, get_back_keyboard
+from handlers.cv_handlers import register_cv_handlers
 import config
 
 logger = logging.getLogger(__name__)
 
-def get_main_menu_keyboard():
-    return types.ReplyKeyboardMarkup(
-        keyboard=[
-            [types.KeyboardButton(text="Інформація про CTF 🚩"), types.KeyboardButton(text="Хто такі BEST Lviv❓")],
-            [types.KeyboardButton(text="Моя команда 🫱🏻‍🫲🏿")]
-        ],
+def get_main_menu_keyboard(is_participant=False, event_state=None):
+    if event_state == "main_task" and is_participant:
+        buttons = [
+            [KeyboardButton(text="CTF завдання 🚩"), KeyboardButton(text="Моя команда 🫱🏻‍🫲🏿")]
+        ]
+    else:
+        buttons = [
+            [KeyboardButton(text="Інформація про CTF 🚩"), KeyboardButton(text="Хто такі BEST Lviv❓")],
+            [KeyboardButton(text="Моя команда 🫱🏻‍🫲🏿")]
+        ]
+    logger.info(f"get_main_menu_keyboard called with is_participant={is_participant}, event_state={event_state}")
+    return ReplyKeyboardMarkup(
+        keyboard=buttons,
         resize_keyboard=True,
         one_time_keyboard=True
     )
 
-def get_main_menu_message():
+def get_main_menu_message(is_participant=False, event_state=None):
+    if is_participant:
+        if event_state == "main_task":
+            return (
+                "Тепер ти можеш:\n"
+                " ✅ Виконати основне CTF завдання\n"
+                " ✅ Переглянути інформацію про свою команду\n\n"
+                "Якщо хочеш поспілкуватися з іншими учасниками — пірнай у <a href=\"https://t.me/+6RoHfTot8jdkYzAy\">Чат учасників</a>."
+            )
+        return (
+            "Повертаємось до головного меню! 😊\n"
+            "Тепер ти можеш:\n"
+            " ✅ Перейти до меню команди\n"
+            " ✅ Дізнатись усе про подію ℹ️\n\n"
+            "Якщо хочеш поспілкуватися з тими, хто вже пройшов тестове завдання — пірнай у <a href=\"https://t.me/+6RoHfTot8jdkYzAy\">Чат учасників</a>."
+        )
     return (
         "Повертаємось до головного меню! 😊\n"
         "Тепер ти можеш:\n"
         " ✅ Увійти в команду чи створити свою\n"
-        " ✅ Дізнатись усе про подію ℹ️\n"
-        f"\nЯкщо не маєш команди, з якою хочеш брати участь — пірнай у чат учасників [{config.PARTICIPANTS_CHAT_LINK}]. Там можна легко знайти однодумців! 🤝\n\n"
-        "Йо-хо-хо! І флаг у кишеню! Лет’s гоу! 🚩"
+        " ✅ Дізнатись усе про подію ℹ️\n\n"
+        "Якщо не маєш команди, з якою хочеш брати участь — пірнай у <a href=\"https://t.me/+naYHbnNbN-9mYTFi\">Знайди команду</a>."
     )
 
-def get_team_menu_keyboard():
-    return types.ReplyKeyboardMarkup(
-        keyboard=[
-            [types.KeyboardButton(text="🧪 Тестове завдання")],
-            [types.KeyboardButton(text="🏆 Моє CV")],
-            [types.KeyboardButton(text="🚪 Покинути команду")],
-            [types.KeyboardButton(text="Повернутися до головного меню")]
-        ],
+def get_team_menu_keyboard(is_participant=False, test_task_status=False, event_state=None):
+    logger.info(f"get_team_menu_keyboard called with is_participant={is_participant}, test_task_status={test_task_status}, event_state={event_state}")
+    buttons = []
+    if event_state == "main_task" and is_participant and test_task_status:
+        buttons.append([KeyboardButton(text="🏆 Моє CV")])
+    else:
+        buttons.append([KeyboardButton(text="🧪 Тестове завдання")])
+        buttons.append([KeyboardButton(text="🏆 Моє CV")])
+        buttons.append([KeyboardButton(text="🚪 Покинути команду")])
+    buttons.append([KeyboardButton(text="Повернутися до головного меню")])
+    return ReplyKeyboardMarkup(
+        keyboard=buttons,
         resize_keyboard=True,
         one_time_keyboard=True
     )
 
 def get_leave_confirm_keyboard():
-    return types.ReplyKeyboardMarkup(
+    return ReplyKeyboardMarkup(
         keyboard=[
-            [types.KeyboardButton(text="Так, впевнений(-а) ✅")],
-            [types.KeyboardButton(text="Ні, залишитись ❌")]
+            [KeyboardButton(text="Так, впевнений(-а) ✅")],
+            [KeyboardButton(text="Ні, залишитись ❌")]
         ],
         resize_keyboard=True,
         one_time_keyboard=True
@@ -68,25 +93,52 @@ async def get_team_info(db: Database, user_id: int):
         logger.error(f"Error fetching team info for user {user_id}: {e}")
         return None, None
 
-async def send_main_menu(message: types.Message, state: FSMContext, error_message: str = None):
+async def send_main_menu(message: types.Message, state: FSMContext, db: Database, error_message: str = None):
+    user_id = message.from_user.id
+    event_state = db.get_event_state()
+    logger.info(f"send_main_menu called with event_state={event_state}, user_id={user_id}")
+    if event_state == "finished":
+        await message.answer(
+            "Реєстрація та змагання завершені. Дякуємо за участь! 🚩\nЧекаємо вас на BEST CTF 2026! 😎",
+            reply_markup=None
+        )
+        await state.clear()
+        return
+
+    participant = db.participants.find_one({"user_id": user_id})
+    is_participant = False
+    if participant and participant.get("team_id"):
+        team_status = db.get_team_status(participant["team_id"])
+        logger.info(f"Team status for user {user_id}: {team_status}")
+        is_participant = team_status["is_participant"]
+        if event_state in ["test_task", "main_task"] and not team_status["test_task_status"]:
+            await message.answer(
+                "Шкода, але ваша команда не пройшла на змагання. 😢\n"
+                "Не переймайтеся, наступного року також буде CTF! 🚩\n"
+                "Наша команда дуже вдячна, що саме ви захотіли бути частиною нашого івенту! 🙌",
+                reply_markup=get_main_menu_keyboard(is_participant=False, event_state=event_state)
+            )
+            await state.clear()
+            return
+
     if error_message:
-        await message.answer(error_message, reply_markup=get_main_menu_keyboard())
+        await message.answer(error_message, reply_markup=get_main_menu_keyboard(is_participant, event_state), parse_mode="HTML")
     else:
-        await message.answer(get_main_menu_message(), reply_markup=get_main_menu_keyboard())
+        await message.answer(get_main_menu_message(is_participant, event_state), reply_markup=get_main_menu_keyboard(is_participant, event_state), parse_mode="HTML")
     await state.clear()
 
 def get_team_creation_keyboard():
-    return types.ReplyKeyboardMarkup(
-        keyboard=[[types.KeyboardButton(text="Повернутися до головного меню")]],
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="Повернутися до головного меню")]],
         resize_keyboard=True,
         one_time_keyboard=True
     )
 
 def get_confirm_data_keyboard():
-    return types.ReplyKeyboardMarkup(
+    return ReplyKeyboardMarkup(
         keyboard=[
-            [types.KeyboardButton(text="Правильно ✅")],
-            [types.KeyboardButton(text="Неправильно ❌")]
+            [KeyboardButton(text="Правильно ✅")],
+            [KeyboardButton(text="Неправильно ❌")]
         ],
         resize_keyboard=True,
         one_time_keyboard=True
@@ -98,11 +150,39 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
     @dp.message(lambda message: message.text == "Моя команда 🫱🏻‍🫲🏿" and db.is_user_registered(message.from_user.id))
     async def process_team(message: types.Message, state: FSMContext):
         user_id = message.from_user.id
-        team_info, _ = await get_team_info(db, user_id)
+        event_state = db.get_event_state()
+        logger.info(f"process_team called for user {user_id}, event_state={event_state}")
+        if event_state == "finished":
+            await message.answer(
+                "Реєстрація та змагання завершені. Дякуємо за участь! 🚩\nЧекаємо вас на BEST CTF 2026! 😎",
+                reply_markup=None
+            )
+            await state.clear()
+            return
+
+        team_info, team = await get_team_info(db, user_id)
         if team_info:
-            await message.answer(team_info, reply_markup=get_team_menu_keyboard())
+            team_status = db.get_team_status(team["_id"])
+            logger.info(f"Team status in process_team: {team_status}")
+            if event_state in ["test_task", "main_task"] and not team_status["test_task_status"]:
+                await message.answer(
+                    "Шкода, але ваша команда не пройшла на змагання. 😢\n"
+                    "Не переймайтеся, наступного року також буде CTF! 🚩\n"
+                    "Наша команда дуже вдячна, що саме ви захотіли бути частиною нашого івенту! 🙌",
+                    reply_markup=get_main_menu_keyboard(is_participant=False, event_state=event_state)
+                )
+                await state.clear()
+                return
+            await message.answer(team_info, reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state))
             await state.set_state(TeamMenu.main)
         else:
+            if event_state != "registration":
+                await message.answer(
+                    "Реєстрація завершена, дякуємо за інтерес! Спробуйте наступного року. 🚩",
+                    reply_markup=get_main_menu_keyboard(is_participant=False, event_state=event_state)
+                )
+                await state.clear()
+                return
             image_path = os.path.join(config.ASSETS_PATH, "findTeam.png")
             if not os.path.exists(image_path):
                 logger.error(f"Image file not found at {image_path}")
@@ -115,23 +195,24 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
                     logger.error(f"Failed to send findTeam.png: {str(e)}")
                     await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
 
-            keyboard = types.ReplyKeyboardMarkup(
+            keyboard = ReplyKeyboardMarkup(
                 keyboard=[
-                    [types.KeyboardButton(text="👉 Чат учасників 💭")],
-                    [types.KeyboardButton(text="Створити команду 🫱🏻‍🫲🏿")],
-                    [types.KeyboardButton(text="Приєднатись до команди 👥")],
-                    [types.KeyboardButton(text="Повернутися до головного меню")]
+                    [KeyboardButton(text="👉 Чат учасників 💭")],
+                    [KeyboardButton(text="Створити команду 🫱🏻‍🫲🏿")],
+                    [KeyboardButton(text="Приєднатись до команди 👥")],
+                    [KeyboardButton(text="Повернутися до головного меню")]
                 ],
                 resize_keyboard=True,
                 one_time_keyboard=True
             )
             await message.answer(
                 "❌ Ти поки не в команді.\n\n"
-                "Але це не страшно, адже у нас є чат для учасників, які так само шукають собі мейтів, "
+                "Але це не страшно, адже у нас є чат <a href=\"https://t.me/+naYHbnNbN-9mYTFi\">Знайди команду</a>, де можна познайомитись із тими, хто так само шукає собі мейтів, "
                 "все що тобі потрібно це перейти в чат і представитись! Хто знає, може саме з цими людьми "
                 "ви зійдете на п’єдестал! 🤝\n\n"
                 "Або ж створи свою команду і запроси інших героїв просто зараз:",
-                reply_markup=keyboard
+                reply_markup=keyboard,
+                parse_mode="HTML"
             )
             await state.clear()
 
@@ -144,31 +225,66 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
         else:
             try:
                 photo = FSInputFile(path=image_path)
-                await message.answer_photo(photo=photo, caption="💭 Приєднуйся до чату учасників!")
+                await message.answer_photo(photo=photo, caption="💭 Приєднуйся до чату!")
             except Exception as e:
                 logger.error(f"Failed to send chat.png: {str(e)}")
                 await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
         
         await message.answer(
-            f"Переходь у чат учасників! 🤝\n{config.PARTICIPANTS_CHAT_LINK}",
-            reply_markup=get_main_menu_keyboard()
+            f"Переходь у <a href=\"https://t.me/+naYHbnNbN-9mYTFi\">Знайди команду</a>! 🤝",
+            reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state()),
+            parse_mode="HTML"
+        )
+
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, lambda message: message.text == "👉 Чат учасників 💭")
+    async def process_invalid_media_chat_link(message: types.Message):
+        image_path = os.path.join(config.ASSETS_PATH, "chat.png")
+        if not os.path.exists(image_path):
+            logger.error(f"Image file not found at {image_path}")
+            await message.answer("‼️ Виникла помилка: зображення chat.png не знайдено. Але не хвилюйся, продовжимо!")
+        else:
+            try:
+                photo = FSInputFile(path=image_path)
+                await message.answer_photo(photo=photo, caption="💭 Приєднуйся до чату!")
+            except Exception as e:
+                logger.error(f"Failed to send chat.png: {str(e)}")
+                await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
+        await message.answer(
+            "‼️ Будь ласка, надсилай тільки текст або натискай на кнопки! Не стікери, фото, GIF чи відео."
+        )
+        await message.answer(
+            f"Переходь у <a href=\"https://t.me/+naYHbnNbN-9mYTFi\">Знайди команду</a>! 🤝",
+            reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state()),
+            parse_mode="HTML"
         )
 
     @dp.message(lambda message: message.text == "Створити команду 🫱🏻‍🫲🏿")
     async def process_create_team(message: types.Message, state: FSMContext):
+        if db.get_event_state() != "registration":
+            await message.answer(
+                "Реєстрація завершена, дякуємо за інтерес! Спробуйте наступного року. 🚩",
+                reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state())
+            )
+            await state.clear()
+            return
         if db.is_user_in_team(message.from_user.id):
             await message.answer(
                 "Ти вже в команді! Спочатку покинь поточну команду, щоб створити нову.",
-                reply_markup=get_main_menu_keyboard()
+                reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state())
             )
             return
         await message.answer("Круто! Давай у кілька натисків по клавіатурі створимо місце, де збираються сильні💪\n\nВведи назву команди:", reply_markup=get_team_creation_keyboard())
         await state.set_state(TeamCreation.team_name)
 
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, TeamCreation.team_name)
+    async def process_invalid_media_team_name(message: types.Message, state: FSMContext):
+        await message.answer("♦️ Введи назву команди:\n‼️ Будь ласка, надсилай тільки текст! Не стікери, фото, GIF чи відео.", reply_markup=get_team_creation_keyboard())
+        return
+
     @dp.message(TeamCreation.team_name)
     async def process_team_name(message: types.Message, state: FSMContext):
         if message.text == "Повернутися до головного меню":
-            await send_main_menu(message, state)
+            await send_main_menu(message, state, db)
             return
         team_name = message.text.strip()
         if len(team_name) < 2:
@@ -181,10 +297,15 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
         await message.answer("Вигадай пароль для команди. Знаю, це складно, але воно точно того варте! 🔒", reply_markup=get_team_creation_keyboard())
         await state.set_state(TeamCreation.team_password)
 
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, TeamCreation.team_password)
+    async def process_invalid_media_team_password(message: types.Message, state: FSMContext):
+        await message.answer("♦️ Вигадай пароль для команди. Знаю, це складно, але воно точно того варте! 🔒\n‼️ Будь ласка, надсилай тільки текст! Не стікери, фото, GIF чи відео.", reply_markup=get_team_creation_keyboard())
+        return
+
     @dp.message(TeamCreation.team_password)
     async def process_team_password(message: types.Message, state: FSMContext):
         if message.text == "Повернутися до головного меню":
-            await send_main_menu(message, state)
+            await send_main_menu(message, state, db)
             return
         password = message.text.strip()
         if len(password) < 4:
@@ -197,6 +318,15 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
             reply_markup=get_confirm_data_keyboard()
         )
         await state.set_state(TeamCreation.confirm_data)
+
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, TeamCreation.confirm_data)
+    async def process_invalid_media_confirm_data(message: types.Message, state: FSMContext):
+        user_data = await state.get_data()
+        await message.answer(
+            f"Перевір, чи правильно введено дані:\nНазва команди: {user_data['team_name']}\nПароль: {user_data['team_password']}\n‼️ Будь ласка, натискай на кнопки! Не надсилай стікери, фото, GIF чи відео.",
+            reply_markup=get_confirm_data_keyboard()
+        )
+        return
 
     @dp.message(lambda message: message.text in ["Правильно ✅", "Неправильно ❌"], TeamCreation.confirm_data)
     async def process_confirm_data(message: types.Message, state: FSMContext):
@@ -213,14 +343,14 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
                     await message.answer(
                         f"Вітаю! Ти створив(-ла) команду *{team_name}*!\n{team_info.split('\n', 1)[1] if team_info and '\n' in team_info else 'Ти єдиний учасник наразі!'}",
                         parse_mode="Markdown",
-                        reply_markup=get_team_menu_keyboard()
+                        reply_markup=get_team_menu_keyboard(is_participant=False, test_task_status=False, event_state=db.get_event_state())
                     )
                     await state.set_state(TeamMenu.main)
                 else:
-                    await send_main_menu(message, state, "Цей пароль уже зайнятий, давай інший 😜")
+                    await send_main_menu(message, state, db, "Цей пароль уже зайнятий, давай інший 😜")
             except Exception as e:
                 logger.error(f"Error creating team for user {user_id}: {e}")
-                await send_main_menu(message, state, "‼️ Виникла помилка при створенні команди. Спробуй ще раз!")
+                await send_main_menu(message, state, db, "‼️ Виникла помилка при створенні команди. Спробуй ще раз!")
         else:
             await message.answer("Добре, давай ще раз! Введи назву команди:", reply_markup=get_team_creation_keyboard())
             await state.set_state(TeamCreation.team_name)
@@ -235,10 +365,17 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
 
     @dp.message(lambda message: message.text == "Приєднатись до команди 👥")
     async def process_join_team(message: types.Message, state: FSMContext):
+        if db.get_event_state() != "registration":
+            await message.answer(
+                "Реєстрація завершена, дякуємо за інтерес! Спробуйте наступного року. 🚩",
+                reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state())
+            )
+            await state.clear()
+            return
         if db.is_user_in_team(message.from_user.id):
             await message.answer(
                 "Ти вже в команді! Спочатку покинь поточну команду, щоб приєднатися до іншої.",
-                reply_markup=get_main_menu_keyboard()
+                reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state())
             )
             return
         await message.answer(
@@ -247,10 +384,15 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
         )
         await state.set_state(TeamJoin.team_name)
 
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, TeamJoin.team_name)
+    async def process_invalid_media_join_team_name(message: types.Message, state: FSMContext):
+        await message.answer("♦️ Введи назву команди:\n‼️ Будь ласка, надсилай тільки текст! Не стікери, фото, GIF чи відео.", reply_markup=get_team_creation_keyboard())
+        return
+
     @dp.message(TeamJoin.team_name)
     async def process_join_team_name(message: types.Message, state: FSMContext):
         if message.text == "Повернутися до головного меню":
-            await send_main_menu(message, state)
+            await send_main_menu(message, state, db)
             return
         team_name = message.text.strip()
         if not db.teams.find_one({"team_name": team_name}):
@@ -262,6 +404,11 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
             reply_markup=get_team_creation_keyboard()
         )
         await state.set_state(TeamJoin.team_password)
+
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, TeamJoin.team_password)
+    async def process_invalid_media_join_team_password(message: types.Message, state: FSMContext):
+        await message.answer("♦️ Введи пароль команди. Ти ж його знаєш, правда? 😅\n‼️ Будь ласка, надсилай тільки текст! Не стікери, фото, GIF чи відео.", reply_markup=get_team_creation_keyboard())
+        return
 
     @dp.message(TeamJoin.team_password)
     async def process_join_team_password(message: types.Message, state: FSMContext):
@@ -279,7 +426,7 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
                 await message.answer(
                     f"Вітаю, тепер ти успішно доєднався(-лась) до команди *{team_name}*!\n{team_info.split('\n', 1)[1] if team_info and '\n' in team_info else 'Ти приєднався до команди!'}",
                     parse_mode="Markdown",
-                    reply_markup=get_team_menu_keyboard()
+                    reply_markup=get_team_menu_keyboard(is_participant=False, test_task_status=False, event_state=db.get_event_state())
                 )
                 await state.set_state(TeamMenu.main)
                 for member_id, member in [(m_id, db.participants.find_one({"user_id": m_id})) for m_id in team["members"] if m_id != user_id]:
@@ -287,7 +434,7 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
                         try:
                             await bot.send_message(
                                 chat_id=member["chat_id"],
-                                text=f"Вітаю, до вашої команди *{team_name}* доєднався(-лась) *{new_member_name}*! Якщо ви не знаєте, хто це, зверніться до {config.ORGANIZER_CONTACT}.",
+                                text=f"Вітаю, до вашої команди *{team_name}* доєднався(-лась) *{new_member_name}*! Якщо ви не знаете, хто це, зверніться до {config.ORGANIZER_CONTACT}.",
                                 parse_mode="Markdown"
                             )
                         except Exception as e:
@@ -306,154 +453,288 @@ def register_team_handlers(dp: Dispatcher, db: Database, bot):
                 reply_markup=get_team_creation_keyboard()
             )
 
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, lambda message: message.text == "Повернутися до головного меню")
+    async def process_invalid_media_back_to_main_menu(message: types.Message, state: FSMContext):
+        await message.answer("‼️ Будь ласка, надсилай тільки текст або натискай на кнопки! Не стікери, фото, GIF чи відео.")
+        await send_main_menu(message, state, db)
+
     @dp.message(lambda message: message.text == "Повернутися до головного меню")
     async def process_back_to_main_menu(message: types.Message, state: FSMContext):
         current_state = await state.get_state()
-        if current_state in [TeamCreation.team_name, TeamCreation.team_password, TeamJoin.team_name, TeamJoin.team_password, TeamLeaveConfirm.first_confirm, TeamLeaveConfirm.second_confirm]:
-            await send_main_menu(message, state)
+        if current_state in [TeamCreation.team_name, TeamCreation.team_password, TeamJoin.team_name, TeamJoin.team_password, TeamLeaveConfirm.first_confirm]:
+            await send_main_menu(message, state, db)
         else:
-            await send_main_menu(message, state) 
+            await send_main_menu(message, state, db)
 
     @dp.message(lambda message: message.text == "🧪 Тестове завдання", TeamMenu.main)
-    async def process_test_task(message: types.Message):
-        image_path = os.path.join(config.ASSETS_PATH, "test.png")
-        if not os.path.exists(image_path):
-            logger.error(f"Image file not found at {image_path}")
-            await message.answer("‼️ Виникла помилка: зображення test.png не знайдено. Але не хвилюйся, продовжимо!")
+    async def process_test_task(message: types.Message, state: FSMContext):
+        user_id = message.from_user.id
+        event_state = db.get_event_state()
+        logger.info(f"process_test_task called for user {user_id}, event_state={event_state}")
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
+        team_status = db.get_team_status(team["_id"])
+        logger.info(f"Team status in process_test_task: {team_status}")
+        if event_state == "registration":
+            image_path = os.path.join(config.ASSETS_PATH, "test.png")
+            if not os.path.exists(image_path):
+                logger.error(f"Image file not found at {image_path}")
+                await message.answer("‼️ Виникла помилка: зображення test.png не знайдено. Але не хвилюйся, продовжимо!")
+            else:
+                try:
+                    photo = FSInputFile(path=image_path)
+                    await message.answer_photo(photo=photo, caption="🧪 Тестове завдання для вашої команди!")
+                except Exception as e:
+                    logger.error(f"Failed to send test.png: {str(e)}")
+                    await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
+            await message.answer(
+                "Йой його поки тут немає😢 Воно буде 15-го листопада. Заряджай ноут, завантажуй усі словники і будь готовий до бою🔥\n"
+                "‼️ Увага ‼️: брати участь можуть лише команди, у яких є щонайменше 3 учасники.",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+        elif event_state == "test_task" and team_status["test_task_status"]:
+            image_path = os.path.join(config.ASSETS_PATH, "test.png")
+            if not os.path.exists(image_path):
+                logger.error(f"Image file not found at {image_path}")
+                await message.answer("‼️ Виникла помилка: зображення test.png не знайдено. Але не хвилюйся, продовжимо!")
+            else:
+                try:
+                    photo = FSInputFile(path=image_path)
+                    await message.answer_photo(photo=photo, caption="🧪 Тестове завдання для вашої команди!")
+                except Exception as e:
+                    logger.error(f"Failed to send test.png: {str(e)}")
+                    await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
+            pdf_path = os.path.join(config.ASSETS_PATH, "test_task.pdf")
+            if not os.path.exists(pdf_path):
+                logger.error(f"PDF file not found at {pdf_path}")
+                await message.answer("‼️ Виникла помилка: файл test_task.pdf не знайдено. Але не хвилюйся, продовжимо!")
+            else:
+                try:
+                    document = FSInputFile(path=pdf_path)
+                    await message.answer_document(document=document, caption="🧪 Тестове завдання для вашої команди!")
+                except Exception as e:
+                    logger.error(f"Failed to send test_task.pdf: {str(e)}")
+                    await message.answer(f"‼️ Виникла помилка при відправці файлу: {str(e)}. Але не хвилюйся, продовжимо!")
+            await message.answer(
+                "Це ваше тестове завдання! 🧪\n"
+                "Виконайте його та надішліть відповідь організаторам.",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+        else:
+            await message.answer(
+                "Тестовий етап ще не розпочався або вже закінчився. Слідкуй за оновленнями! 🚩",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, lambda message: message.text == "🧪 Тестове завдання", TeamMenu.main)
+    async def process_invalid_media_test_task(message: types.Message, state: FSMContext):
+        user_id = message.from_user.id
+        event_state = db.get_event_state()
+        logger.info(f"process_invalid_media_test_task called for user {user_id}, event_state={event_state}")
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
+        team_status = db.get_team_status(team["_id"])
+        logger.info(f"Team status in process_invalid_media_test_task: {team_status}")
+        await message.answer("‼️ Будь ласка, надсилай тільки текст або натискай на кнопки! Не стікери, фото, GIF чи відео.")
+        if event_state == "registration":
+            image_path = os.path.join(config.ASSETS_PATH, "test.png")
+            if not os.path.exists(image_path):
+                logger.error(f"Image file not found at {image_path}")
+                await message.answer("‼️ Виникла помилка: зображення test.png не знайдено. Але не хвилюйся, продовжимо!")
+            else:
+                try:
+                    photo = FSInputFile(path=image_path)
+                    await message.answer_photo(photo=photo, caption="🧪 Тестове завдання для вашої команди!")
+                except Exception as e:
+                    logger.error(f"Failed to send test.png: {str(e)}")
+                    await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
+            await message.answer(
+                "Йой його поки тут немає😢 Воно буде 15-го листопада. Заряджай ноут, завантажуй усі словники і будь готовий до бою🔥\n"
+                "‼️ Увага ‼️: брати участь можуть лише команди, у яких є щонайменше 3 учасники.",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+        elif event_state == "test_task" and team_status["test_task_status"]:
+            image_path = os.path.join(config.ASSETS_PATH, "test.png")
+            if not os.path.exists(image_path):
+                logger.error(f"Image file not found at {image_path}")
+                await message.answer("‼️ Виникла помилка: зображення test.png не знайдено. Але не хвилюйся, продовжимо!")
+            else:
+                try:
+                    photo = FSInputFile(path=image_path)
+                    await message.answer_photo(photo=photo, caption="🧪 Тестове завдання для вашої команди!")
+                except Exception as e:
+                    logger.error(f"Failed to send test.png: {str(e)}")
+                    await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
+            pdf_path = os.path.join(config.ASSETS_PATH, "test_task.pdf")
+            if not os.path.exists(pdf_path):
+                logger.error(f"PDF file not found at {pdf_path}")
+                await message.answer("‼️ Виникла помилка: файл test_task.pdf не знайдено. Але не хвилюйся, продовжимо!")
+            else:
+                try:
+                    document = FSInputFile(path=pdf_path)
+                    await message.answer_document(document=document, caption="🧪 Тестове завдання для вашої команди!")
+                except Exception as e:
+                    logger.error(f"Failed to send test_task.pdf: {str(e)}")
+                    await message.answer(f"‼️ Виникла помилка при відправці файлу: {str(e)}. Але не хвилюйся, продовжимо!")
+            await message.answer(
+                "Це ваше тестове завдання! 🧪\n"
+                "Виконайте його та надішліть відповідь організаторам.",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+        else:
+            await message.answer(
+                "Тестовий етап ще не розпочався або вже закінчився. Слідкуй за оновленнями! 🚩",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+
+    @dp.message(lambda message: message.text == "🚩 CTF завдання 🚩", TeamMenu.main)
+    async def process_main_task(message: types.Message, state: FSMContext):
+        user_id = message.from_user.id
+        event_state = db.get_event_state()
+        logger.info(f"process_main_task called for user {user_id}, event_state={event_state}")
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
+        team_status = db.get_team_status(team["_id"])
+        logger.info(f"Team status in process_main_task: {team_status}")
+        if not team_status["is_participant"] or not team_status["test_task_status"]:
+            await message.answer(
+                "Ваша команда ще не пройшла тестове завдання. Завершіть його, щоб отримати доступ до основного CTF завдання! 🚩",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+            return
+        if event_state != "main_task":
+            await message.answer(
+                "Основний етап CTF ще не розпочався або вже закінчився. Слідкуй за оновленнями! 🚩",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+            return
+        pdf_path = os.path.join(config.ASSETS_PATH, "main_task.pdf")
+        if not os.path.exists(pdf_path):
+            logger.error(f"PDF file not found at {pdf_path}")
+            await message.answer("‼️ Виникла помилка: файл main_task.pdf не знайдено. Зверніться до організаторів!")
         else:
             try:
-                photo = FSInputFile(path=image_path)
-                await message.answer_photo(photo=photo, caption="🧪 Готуйся до тестового завдання!")
+                document = FSInputFile(path=pdf_path)
+                await message.answer_document(document=document, caption="🚩 Основне CTF завдання для вашої команди!")
             except Exception as e:
-                logger.error(f"Failed to send test.png: {str(e)}")
-                await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
-        
+                logger.error(f"Failed to send main_task.pdf: {str(e)}")
+                await message.answer(f"‼️ Виникла помилка при відправці файлу: {str(e)}. Зверніться до організаторів!")
         await message.answer(
-            "Йой, його поки тут немає😢 Воно буде 15-го листопада. Заряджай ноут, завантажуй усі словники і будь готовий(-а) до бою🔥\n"
-            "‼️ Увага ‼️: брати участь можуть лише команди, у яких є щонайменше 3 учасники.",
-            reply_markup=get_back_keyboard()
+            "Це ваше основне CTF завдання! Виконайте його та надішліть відповідь організаторам.",
+            reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+        )
+
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, lambda message: message.text == "🚩 CTF завдання 🚩", TeamMenu.main)
+    async def process_invalid_media_main_task(message: types.Message, state: FSMContext):
+        user_id = message.from_user.id
+        event_state = db.get_event_state()
+        logger.info(f"process_invalid_media_main_task called for user {user_id}, event_state={event_state}")
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
+        team_status = db.get_team_status(team["_id"])
+        logger.info(f"Team status in process_invalid_media_main_task: {team_status}")
+        if not team_status["is_participant"] or not team_status["test_task_status"]:
+            await message.answer(
+                "Ваша команда ще не пройшла тестове завдання. Завершіть його, щоб отримати доступ до основного CTF завдання! 🚩",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+            return
+        if event_state != "main_task":
+            await message.answer(
+                "Основний етап CTF ще не розпочався або вже закінчився. Слідкуй за оновленнями! 🚩",
+                reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
+            )
+            return
+        await message.answer("‼️ Будь ласка, надсилай тільки текст або натискай на кнопки! Не стікери, фото, GIF чи відео.")
+        pdf_path = os.path.join(config.ASSETS_PATH, "main_task.pdf")
+        if not os.path.exists(pdf_path):
+            logger.error(f"PDF file not found at {pdf_path}")
+            await message.answer("‼️ Виникла помилка: файл main_task.pdf не знайдено. Зверніться до організаторів!")
+        else:
+            try:
+                document = FSInputFile(path=pdf_path)
+                await message.answer_document(document=document, caption="🚩 Основне CTF завдання для вашої команди!")
+            except Exception as e:
+                logger.error(f"Failed to send main_task.pdf: {str(e)}")
+                await message.answer(f"‼️ Виникла помилка при відправці файлу: {str(e)}. Зверніться до організаторів!")
+        await message.answer(
+            "Це ваше основне CTF завдання! Виконайте його та надішліть відповідь організаторам.",
+            reply_markup=get_team_menu_keyboard(team_status["is_participant"], team_status["test_task_status"], event_state)
         )
 
     @dp.message(lambda message: message.text == "🚪 Покинути команду", TeamMenu.main)
     async def process_leave_team(message: types.Message, state: FSMContext):
         user_id = message.from_user.id
-        try:
-            participant = db.participants.find_one({"user_id": user_id})
-            if participant and participant.get("team_id"):
-                team = db.teams.find_one({"_id": participant["team_id"]})
-                team_name = team["team_name"] if team else "невідома команда"
-                await message.answer(
-                    f"Ти впевнений(-а), що хочеш покинути команду *{team_name}*? 😢",
-                    parse_mode="Markdown",
-                    reply_markup=get_leave_confirm_keyboard()
-                )
-                await state.set_state(TeamLeaveConfirm.first_confirm)
-                await state.update_data(team_name=team_name, team=team)
-            else:
-                await send_main_menu(message, state, "Ти не в команді, тож немає що покидати! 😅")
-        except Exception as e:
-            logger.error(f"Error initiating leave team for user {user_id}: {e}")
-            await message.answer("‼️ Виникла помилка при спробі покинути команду. Спробуй ще раз!", reply_markup=get_team_menu_keyboard())
-            await state.set_state(TeamMenu.main)
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
+        await message.answer(
+            f"Ти впевнений(-а), що хочеш покинути команду *{team['team_name']}*? 😔",
+            parse_mode="Markdown",
+            reply_markup=get_leave_confirm_keyboard()
+        )
+        await state.set_state(TeamLeaveConfirm.first_confirm)
+
+    @dp.message(lambda message: message.sticker or message.photo or message.video or message.animation, TeamLeaveConfirm.first_confirm)
+    async def process_invalid_media_leave_confirm(message: types.Message, state: FSMContext):
+        user_id = message.from_user.id
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
+        await message.answer(
+            f"‼️ Будь ласка, натискай на кнопки! Не надсилай стікери, фото, GIF чи відео.\n"
+            f"Ти впевнений(-а), що хочеш покинути команду *{team['team_name']}*? 😔",
+            parse_mode="Markdown",
+            reply_markup=get_leave_confirm_keyboard()
+        )
 
     @dp.message(lambda message: message.text in ["Так, впевнений(-а) ✅", "Ні, залишитись ❌"], TeamLeaveConfirm.first_confirm)
-    async def process_leave_first_confirm(message: types.Message, state: FSMContext):
+    async def process_leave_confirm(message: types.Message, state: FSMContext):
         user_id = message.from_user.id
-        user_data = await state.get_data()
-        team_name = user_data.get("team_name", "невідома команда")
-        if message.text == "Так, впевнений(-а) ✅":
-            await message.answer(
-                f"Точно-точно впевнений(-а)? Це останній шанс покинути команду *{team_name}*! 😔",
-                parse_mode="Markdown",
-                reply_markup=get_leave_confirm_keyboard()
-            )
-            await state.set_state(TeamLeaveConfirm.second_confirm)
-        else:
-            team_info, _ = await get_team_info(db, user_id)
-            if team_info:
-                await message.answer(f"Супер, ти залишився(-лась) у команді! 😊\n{team_info}", reply_markup=get_team_menu_keyboard())
-                await state.set_state(TeamMenu.main)
-            else:
-                await send_main_menu(message, state, "‼️ Виникла помилка при отриманні інформації про команду. Спробуй ще раз!")
-
-    @dp.message(lambda message: message.text in ["Так, впевнений(-а) ✅", "Ні, залишитись ❌"], TeamLeaveConfirm.second_confirm)
-    async def process_leave_second_confirm(message: types.Message, state: FSMContext):
-        user_id = message.from_user.id
-        user_data = await state.get_data()
-        team_name = user_data.get("team_name", "невідома команда")
-        team = user_data.get("team")
+        team_info, team = await get_team_info(db, user_id)
+        if not team:
+            await send_main_menu(message, state, db, "Ви не в команді! Приєднайтесь до команди або створіть нову.")
+            return
         if message.text == "Так, впевнений(-а) ✅":
             try:
-                participant = db.participants.find_one({"user_id": user_id})
-                if participant and participant.get("team_id"):
-                    success = db.leave_team(user_id)
-                    if success:
-                        await send_main_menu(message, state, f"Ти успішно покинув(-ла) команду *{team_name}*! 😢")
-                        if team:
-                            for member_id, member in [(m_id, db.participants.find_one({"user_id": m_id})) for m_id in team["members"] if m_id != user_id]:
-                                if member and "chat_id" in member:
-                                    try:
-                                        await bot.send_message(
-                                            chat_id=member["chat_id"],
-                                            text=f"Користувач *{participant['name']}* покинув(-ла) команду *{team_name}*!",
-                                            parse_mode="Markdown"
-                                        )
-                                    except Exception as e:
-                                        logger.error(f"Error sending leave notification to user {member_id}: {e}")
-                                else:
-                                    logger.warning(f"No chat_id found for user {member_id} in team {team_name}")
-                    else:
-                        await message.answer("‼️ Не вдалося покинути команду. Спробуй ще раз!", reply_markup=get_team_menu_keyboard())
-                        await state.set_state(TeamMenu.main)
+                success = db.leave_team(user_id)
+                if success:
+                    await message.answer(
+                        f"Ти покинув(-ла) команду *{team['team_name']}*. 😢\n"
+                        "Але не хвилюйся, ти можеш створити нову або приєднатися до іншої!",
+                        parse_mode="Markdown",
+                        reply_markup=get_main_menu_keyboard(is_participant=False, event_state=db.get_event_state())
+                    )
+                    for member_id, member in [(m_id, db.participants.find_one({"user_id": m_id})) for m_id in team["members"] if m_id != user_id]:
+                        if member and "chat_id" in member:
+                            try:
+                                await bot.send_message(
+                                    chat_id=member["chat_id"],
+                                    text=f"Учасник залишив команду *{team['team_name']}*. 😔",
+                                    parse_mode="Markdown"
+                                )
+                            except Exception as e:
+                                logger.error(f"Error sending notification to user {member_id}: {e}")
+                    await state.clear()
                 else:
-                    await send_main_menu(message, state, "Ти не в команді, тож немає що покидати! 😅")
+                    await send_main_menu(message, state, db, "‼️ Виникла помилка при виході з команди. Спробуй ще раз!")
             except Exception as e:
                 logger.error(f"Error leaving team for user {user_id}: {e}")
-                await message.answer("‼️ Виникла помилка при покиданні команди. Спробуй ще раз!", reply_markup=get_team_menu_keyboard())
-                await state.set_state(TeamMenu.main)
+                await send_main_menu(message, state, db, "‼️ Виникла помилка при виході з команди. Спробуй ще раз!")
         else:
-            team_info, _ = await get_team_info(db, user_id)
-            if team_info:
-                await message.answer(f"Супер, ти залишився(-лась) у команді! 😊\n{team_info}", reply_markup=get_team_menu_keyboard())
-                await state.set_state(TeamMenu.main)
-            else:
-                await send_main_menu(message, state, "‼️ Виникла помилка при отриманні інформації про команду. Спробуй ще раз!")
-
-    @dp.message(TeamLeaveConfirm.first_confirm)
-    async def process_invalid_first_confirm(message: types.Message, state: FSMContext):
-        user_data = await state.get_data()
-        team_name = user_data.get("team_name", "невідома команда")
-        await message.answer(
-            f"Ти впевнений(-а), що хочеш покинути команду *{team_name}*? 😢\n‼️ Будь ласка, вибери один із варіантів нижче!",
-            parse_mode="Markdown",
-            reply_markup=get_leave_confirm_keyboard()
-        )
-
-    @dp.message(TeamLeaveConfirm.second_confirm)
-    async def process_invalid_second_confirm(message: types.Message, state: FSMContext):
-        user_data = await state.get_data()
-        team_name = user_data.get("team_name", "невідома команда")
-        await message.answer(
-            f"Точно-точно впевнений(-а)? Це останній шанс покинути команду *{team_name}*! 😔\n‼️ Будь ласка, вибери один із варіантів нижче!",
-            parse_mode="Markdown",
-            reply_markup=get_leave_confirm_keyboard()
-        )
-
-    @dp.message(lambda message: message.text == "Назад")
-    async def process_back_from_task(message: types.Message, state: FSMContext):
-        user_id = message.from_user.id
-        team_info, _ = await get_team_info(db, user_id)
-        if team_info:
-            await message.answer(team_info, reply_markup=get_team_menu_keyboard())
+            team_status = db.get_team_status(team["_id"])
+            await message.answer(
+                "Чудово, ти залишився(-лась) у команді! 💪",
+                reply_markup=get_team_menu_keyboard(is_participant=team_status["is_participant"], test_task_status=team_status["test_task_status"], event_state=db.get_event_state())
+            )
             await state.set_state(TeamMenu.main)
-        else:
-            await send_main_menu(message, state, "‼️ Виникла помилка при отриманні інформації про команду. Спробуй ще раз!")
-
-    @dp.message(TeamMenu.main)
-    async def process_invalid_team_menu(message: types.Message, state: FSMContext):
-        user_id = message.from_user.id
-        team_info, _ = await get_team_info(db, user_id)
-        if team_info:
-            await message.answer(f"{team_info}\n‼️ Будь ласка, вибери один із варіантів нижче!", reply_markup=get_team_menu_keyboard())
-        else:
-            await send_main_menu(message, state, "‼️ Виникла помилка при отриманні інформації про команду. Спробуй ще раз!")

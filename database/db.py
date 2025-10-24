@@ -12,6 +12,9 @@ class Database:
             self.participants = self.db["participants"]
             self.teams = self.db["teams"]
             self.cv = self.db["cv"]
+            self.event_state = self.db["event_state"]
+            if self.event_state.count_documents({"event_id": "CTF2025"}) == 0:
+                self.event_state.insert_one({"event_id": "CTF2025", "current_state": "registration"})
             logger.info("Connected to MongoDB")
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
@@ -48,7 +51,9 @@ class Database:
                 team_data = {
                     "team_name": team_name,
                     "category": "CTF2025",
-                    "members": [user_id]
+                    "members": [user_id],
+                    "is_participant": False,
+                    "test_task_status": False
                 }
                 if password:
                     team_data["password"] = password
@@ -72,7 +77,7 @@ class Database:
                 "data_consent": data_consent,
                 "phone": phone,
                 "team_id": team_id,
-                "chat_id": chat_id, 
+                "chat_id": chat_id,
                 "registration_date": datetime.now().isoformat()
             })
             logger.info(f"Added participant {user_id} to DB")
@@ -156,3 +161,50 @@ class Database:
         except Exception as e:
             logger.error(f"Error dropping admin collection: {e}")
             raise
+
+    def set_team_participant_status(self, team_id, status):
+        try:
+            self.teams.update_one({"_id": team_id}, {"$set": {"is_participant": status}})
+            logger.info(f"Updated is_participant to {status} for team {team_id}")
+        except Exception as e:
+            logger.error(f"Error updating is_participant for team {team_id}: {e}")
+            raise
+
+    def set_team_test_task_status(self, team_id, status):
+        try:
+            self.teams.update_one({"_id": team_id}, {"$set": {"test_task_status": status}})
+            if status:
+                self.set_team_participant_status(team_id, True) 
+            logger.info(f"Updated test_task_status to {status} for team {team_id}")
+        except Exception as e:
+            logger.error(f"Error updating test_task_status for team {team_id}: {e}")
+            raise
+
+    def get_team_status(self, team_id):
+        try:
+            team = self.teams.find_one({"_id": team_id})
+            if team:
+                return {"is_participant": team.get("is_participant", False), "test_task_status": team.get("test_task_status", False)}
+            return {"is_participant": False, "test_task_status": False}
+        except Exception as e:
+            logger.error(f"Error getting team status for {team_id}: {e}")
+            return {"is_participant": False, "test_task_status": False}
+
+    def set_event_state(self, state):
+        try:
+            valid_states = ["registration", "test_task", "main_task", "finished"]
+            if state not in valid_states:
+                raise ValueError(f"Invalid state: {state}. Must be one of {valid_states}")
+            self.event_state.update_one({"event_id": "CTF2025"}, {"$set": {"current_state": state}}, upsert=True)
+            logger.info(f"Set event state to {state}")
+        except Exception as e:
+            logger.error(f"Error setting event state to {state}: {e}")
+            raise
+
+    def get_event_state(self):
+        try:
+            event = self.event_state.find_one({"event_id": "CTF2025"})
+            return event["current_state"] if event else "registration"
+        except Exception as e:
+            logger.error(f"Error getting event state: {e}")
+            return "registration"
