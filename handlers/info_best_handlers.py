@@ -26,7 +26,7 @@ def register_info_best_handlers(dp: Dispatcher, db=None, bot=None):
                 await message.answer_photo(photo=photo, caption="Хто такі BEST Lviv ❓")
             except Exception as e:
                 logger.error(f"Failed to send best.png: {str(e)}")
-                await message.answer(f"‼️ Виникла помилка при відправці зображення: {str(e)}. Але не хвилюйся, продовжимо!")
+                await message.answer(f"‼️ Виникла помилка при відправки зображення: {str(e)}. Але не хвилюйся, продовжимо!")
         
         await message.answer(
             "<b>BEST Lviv</b> — це осередок міжнародної <b>неприбуткової, непартійної, молодіжної організації</b>.\n"
@@ -40,7 +40,8 @@ def register_info_best_handlers(dp: Dispatcher, db=None, bot=None):
             "  <b>👾 HACKath0n</b>\n"
             "  <b>🚀 BEC</b> (Best Engineering Competition)\n"
             "  <b>🎓 BTW</b> (BEST Training Week)\n"
-            "  <b>💼 ІЯК</b> (Інженерний Ярмарок Кар’єри)",
+            "  <b>💼 ІЯК</b> (Інженерний Ярмарок Кар’єри)\n\n"
+            "Можеш ознайомитися з діяльністю нашої організації на <a href='https://best-lviv.org.ua/ua/'>офіційному сайті</a> 🥰",
             parse_mode="HTML",
             reply_markup=get_back_to_main_menu_keyboard()
         )
